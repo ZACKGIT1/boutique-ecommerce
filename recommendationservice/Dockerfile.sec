@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.4
+ARG BUILDPLATFORM=linux/amd64
+
+FROM --platform=$BUILDPLATFORM python:3.14.4-alpine@sha256:dd4d2bd5b53d9b25a51da13addf2be586beebd5387e289e798e4083d94ca837a AS base
+
+FROM base AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+# Install build deps for compiling native extensions (isolated to builder)
+RUN apk add --no-cache g++ linux-headers
+
+WORKDIR /build
+
+# Copy dependency manifest first for caching
+COPY requirements.txt .
+
+# ✅ Install with hash verification and no cache
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+
+FROM base AS final
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+# Install only runtime dependencies + create non-root user
+RUN apk add --no-cache libstdc++ && \
+    addgroup -g 1000 -S appgroup && \
+    adduser -S appuser -u 1000 -G appgroup
+
+WORKDIR /recommendationservice
+
+# Copy Python packages from builder with correct ownership
+COPY --from=builder --chown=appuser:appgroup /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
+
+# Copy application code (ensure .dockerignore excludes secrets)
+COPY --chown=appuser:appgroup . .
+
+# Run as non-root user
+USER appuser
+
+# Configure port
+ENV PORT="8080"
+EXPOSE 8080
+
+# Health check for orchestrator resilience
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+
+# Exec form for proper signal handling
+ENTRYPOINT ["python", "-u", "recommendation_server.py"]

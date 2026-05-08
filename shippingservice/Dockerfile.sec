@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.4
+ARG BUILDPLATFORM=linux/amd64
+
+FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine@sha256:f85330846cde1e57ca9ec309382da3b8e6ae3ab943d2739500e08c86393a21b1 AS builder
+
+ARG TARGETOS=linux TARGETARCH=amd64 SKAFFOLD_GO_GCFLAGS
+WORKDIR /src
+
+# Dependency caching layer with verification
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+# Copy source (ensure .dockerignore excludes secrets)
+COPY . .
+
+# Build static, stripped binary
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+    go build -ldflags="-s -w" -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /go/bin/shippingservice .
+
+# Use distroless static-nonroot for built-in non-root user
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /src
+
+# Copy binary with correct ownership
+COPY --from=builder --chown=nonroot:nonroot /go/bin/shippingservice /src/shippingservice
+
+ENV APP_PORT=50051
+ENV GOTRACEBACK=single
+
+# Health check for gRPC service (implement health handler in Go)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["/src/shippingservice", "health"] || exit 1
+
+EXPOSE 50051
+
+# Already runs as nonroot due to base image
+ENTRYPOINT ["/src/shippingservice"]

@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.4
+ARG BUILDPLATFORM=linux/amd64
+
+# ---------- RUNTIME BASE ----------
+# 🔒 Pin digest to prevent supply chain attacks (get via: docker pull python:3.12-slim && docker inspect)
+FROM --platform=$BUILDPLATFORM python:3.12.11-slim@sha256:47ae396f09c1303b8653019811a8498470603d7ffefc29cb07c88f1f8cb3d19f AS base
+
+# Runtime dependencies for PostgreSQL connectivity
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONFAULTHANDLER=1 \
+    PYTHONHASHSEED=random \
+    PYTHONNOUSERSITE=1
+
+# ---------- BUILD STAGE ----------
+FROM base AS builder
+
+# Build dependencies for compiling psycopg2 & pgvector C-extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY requirements.in requirements.txt
+
+# 🔒 Install with hash verification for supply chain security
+RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.txt
+
+# ---------- FINAL IMAGE ----------
+FROM base
+
+# 🔒 Create non-root user with minimal privileges
+RUN useradd --create-home --shell /bin/bash --uid 1000 appuser && \
+    mkdir -p /shoppingassistantservice && \
+    chown -R appuser:appuser /shoppingassistantservice /home/appuser
+
+WORKDIR /shoppingassistantservice
+USER appuser
+
+# Copy compiled Python packages with correct ownership
+COPY --from=builder --chown=appuser:appuser /install /usr/local
+
+# Copy application code (ensure .dockerignore excludes secrets)
+COPY --chown=appuser:appuser . .
+
+# Configure port
+ENV PORT=8080
+EXPOSE 8080
+
+# 🔒 Health check for orchestrator resilience
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+
+# 🔒 OCI labels for traceability & policy enforcement
+LABEL org.opencontainers.image.source="https://github.com/yourorg/shoppingassistantservice"
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
+LABEL org.opencontainers.image.version="${VERSION}"
+
+# ✅ Exec form for proper signal handling
+ENTRYPOINT ["python", "-u", "shoppingassistantservice.py"]

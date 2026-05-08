@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1.4
+ARG BUILDPLATFORM=linux/amd64
+
+# Builder stage: .NET SDK
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.100-noble@sha256:c7445f141c04f1a6b454181bd098dcfa606c61ba0bd213d0a702489e5bd4cd71 AS builder
+
+ARG TARGETARCH=amd64
+WORKDIR /app
+
+# Dependency restore layer (cached unless .csproj changes)
+COPY cartservice.csproj .
+RUN dotnet restore cartservice.csproj -a $TARGETARCH
+
+# Copy source (ensure .dockerignore excludes secrets/build artifacts)
+COPY . .
+
+# Publish optimized, trimmed, self-contained single-file binary
+RUN dotnet publish cartservice.csproj \
+    -p:PublishSingleFile=true \
+    -a $TARGETARCH \
+    --self-contained true \
+    -p:PublishTrimmed=true \
+    -p:TrimMode=full \
+    -c Release \
+    -o /cartservice
+
+# Final stage: minimal chiseled runtime
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.0-noble-chiseled@sha256:b857c8cb8d929183cfe4c6dd9994abba92a2639dd2dbaf06005379f815991604
+
+WORKDIR /app
+
+# Copy published binary with correct non-root ownership
+COPY --from=builder --chown=1000:1000 /cartservice .
+
+# Disable diagnostics, configure Kestrel port
+ENV DOTNET_EnableDiagnostics=0 \
+    ASPNETCORE_HTTP_PORTS=7070
+
+# Run as non-root user (UID 1000)
+USER 1000
+
+# Health check for orchestrator resilience (adjust endpoint)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:7070/health || exit 1
+
+EXPOSE 7070
+
+# Exec form for proper signal handling
+ENTRYPOINT ["/app/cartservice"]

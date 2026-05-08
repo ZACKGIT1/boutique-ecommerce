@@ -1,0 +1,211 @@
+services:
+  frontend:
+    image: frontend:v1
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AD_SERVICE_ADDR: ad:9555
+      CART_SERVICE_ADDR: cart:7070
+      CHECKOUT_SERVICE_ADDR: checkout:5050
+      CURRENCY_SERVICE_ADDR: currency:7000
+      PRODUCT_CATALOG_SERVICE_ADDR: productcatalog:3550
+      RECOMMENDATION_SERVICE_ADDR: recommendation:8080
+      SHIPPING_SERVICE_ADDR: shipping:50051
+      SHOPPING_ASSISTANT_SERVICE_ADDR: shopping:8080
+      DISABLE_PROFILER: "true"
+    depends_on:
+      - ad
+      - cart
+      - checkout
+      - currency
+      - productcatalog
+      - recommendation
+      - shipping
+      - shopping
+    networks:
+      - my-net
+
+  shopping:
+    image: shopping:v2
+    build:
+      context: ./shoppingassistantservice
+      dockerfile: Dockerfile
+    container_name: shopping
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      PORT: "8080"
+      AWS_REGION: ap-south-1
+      RDS_HOST: shoppingassistant-db.cd0gyai0cf9w.ap-south-1.rds.amazonaws.com
+      RDS_DATABASE: shoppingassistant
+      RDS_SECRET_NAME: prod/shoppingassistant/db
+      VECTOR_TABLE_NAME: products
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      - redis
+    networks:
+      - my-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - my-net
+
+  ad:
+    image: ad:v1
+    build:
+      context: ./adservice
+      dockerfile: Dockerfile
+    container_name: ad
+    restart: unless-stopped
+    networks:
+      - my-net
+
+  checkout:
+    image: checkout:v1
+    build:
+      context: ./checkoutservice
+      dockerfile: Dockerfile
+    container_name: checkout
+    restart: unless-stopped
+    environment:
+      CART_SERVICE_ADDR: cart:7070
+      CURRENCY_SERVICE_ADDR: currency:7000
+      EMAIL_SERVICE_ADDR: email:8080
+      PAYMENT_SERVICE_ADDR: payment:50051
+      PRODUCT_CATALOG_SERVICE_ADDR: productcatalog:3550
+      SHIPPING_SERVICE_ADDR: shipping:50051
+      DISABLE_PROFILER: "true"
+    depends_on:
+      - cart
+      - currency
+      - email
+      - payment
+      - productcatalog
+      - shipping
+    networks:
+      - my-net
+
+  payment:
+    image: payment:v1
+    build:
+      context: ./paymentservice
+      dockerfile: Dockerfile
+    container_name: payment
+    restart: unless-stopped
+    environment:
+      PORT: "50051"
+      DISABLE_PROFILER: "true"
+    networks:
+      - my-net
+
+  email:
+    image: email:v1
+    build:
+      context: ./emailservice
+      dockerfile: Dockerfile
+    container_name: email
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      ENABLE_PROFILER: "0"
+    networks:
+      - my-net
+
+  shipping:
+    image: shipping:v1
+    build:
+      context: ./shippingservice
+      dockerfile: Dockerfile
+    container_name: shipping
+    restart: unless-stopped
+    environment:
+      APP_PORT: "50051"
+      DISABLE_PROFILER: "true"
+    networks:
+      - my-net
+
+  recommendation:
+    image: recommendation:v1
+    build:
+      context: ./recommendationservice
+      dockerfile: Dockerfile
+    container_name: recommendation
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: productcatalog:3550
+      DISABLE_PROFILER: "true"
+    depends_on:
+      - productcatalog
+    networks:
+      - my-net
+
+  cart:
+    image: cart:v1
+    build:
+      context: ./cartservice/src
+      dockerfile: Dockerfile
+    container_name: cart
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_HTTP_PORTS: "7070"
+      DOTNET_EnableDiagnostics: "0"
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "true"
+    networks:
+      - my-net
+
+  currency:
+    image: currency:v1
+    build:
+      context: ./currencyservice
+      dockerfile: Dockerfile
+    container_name: currency
+    restart: unless-stopped
+    environment:
+      PORT: "7000"
+      DISABLE_PROFILER: "true"
+    networks:
+      - my-net
+
+  productcatalog:
+    image: productcatalog:v1
+    build:
+      context: ./productcatalogservice
+      dockerfile: Dockerfile
+    container_name: productcatalog
+    restart: unless-stopped
+    environment:
+      DISABLE_PROFILER: "true"
+    networks:
+      - my-net
+
+  productcatalog-sec:
+    image: productcatalog-sec:v1
+    build:
+      context: ./productcatalogservice
+      dockerfile: Dockerfile.sec
+    container_name: productcatalog-sec
+    restart: unless-stopped
+    profiles:
+      - secure
+    environment:
+      DISABLE_PROFILER: "true"
+    networks:
+      - my-net
+
+networks:
+  my-net:
+    name: my-net
+    external: true

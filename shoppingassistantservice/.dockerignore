@@ -1,0 +1,12 @@
+.git
+.gitignore
+*.md
+Dockerfile*
+docker-compose*
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+infra.sh
+setup-infra.sh

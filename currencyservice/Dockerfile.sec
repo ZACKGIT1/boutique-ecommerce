@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.4
+ARG BUILDPLATFORM=linux/amd64
+
+FROM --platform=$BUILDPLATFORM node:20.20.2-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+
+# Install build tools for native modules (isolated to builder)
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /usr/src/app
+
+# Copy dependency manifests first for caching
+COPY package*.json ./
+
+# ✅ Use npm ci for reproducible, deterministic installs
+RUN npm ci --omit=dev --ignore-scripts
+
+# Final minimal runtime stage
+FROM alpine:3.23.4@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
+
+# Install only Node.js runtime
+RUN apk add --no-cache nodejs && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs
+
+WORKDIR /usr/src/app
+
+# Copy dependencies and app code with correct ownership
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/node_modules ./node_modules
+COPY --chown=nodejs:nodejs . .
+
+# ✅ Run as non-root user
+USER nodejs
+
+# ✅ Health check for orchestrator resilience
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:7000/health', r => process.exit(r.statusCode===200?0:1))" || exit 1
+
+EXPOSE 7000
+
+# ✅ Exec form for proper signal handling
+ENTRYPOINT [ "node", "server.js" ]
