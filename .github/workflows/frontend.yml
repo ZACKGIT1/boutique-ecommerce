@@ -61,7 +61,9 @@ jobs:
         uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8 # v6.1.1
         with:
           version: v1.64.8
+          install-mode: gomod
           args: --timeout=5m --verbose
+          working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run tests with coverage
         run: |
