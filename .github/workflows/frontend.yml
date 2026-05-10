@@ -22,7 +22,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/frontend
-  GO_VERSION: '1.25.0'
+  GO_VERSION: '1.19.0'
   PROTOC_VERSION: '24.4'
   WORKING_DIRECTORY: ./frontend
 
