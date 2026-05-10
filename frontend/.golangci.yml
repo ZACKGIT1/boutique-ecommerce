@@ -1,0 +1,68 @@
+run:
+  # Enable specific linters
+  enable:
+    - errcheck
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - bodyclose
+    - dupl
+    - goconst
+    - gocritic
+    - misspell
+    - nakedret
+    - prealloc
+    - unconvert
+    - unparam
+
+# Exclude specific linters from running on certain files/directories
+exclude-use-default: false
+
+# Configure specific linters
+linters-settings:
+  govet:
+    check-shadowing: true
+  golint:
+    min-confidence: 0.8
+  maligned:
+    suggest-new: true
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+  misspell:
+    locale: US
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - whyNoLint
+
+issues:
+  # Exclude some common issues that are not relevant
+  exclude:
+    - "Error return value of .((os.)?std(out|err)..*|.*Close|.*Flush|os.Remove(All)?|.*print(f|ln)?|os.Unsetenv). is not checked"
+    - "G104: Errors unhandled"
+  # Exclude test files from some checks
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+        - funlen
+        - gocyclo
+
+# Output configuration
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
