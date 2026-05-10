@@ -1,28 +1,28 @@
-.DS_Store
-.eclipse.buildship.core.prefs
-.gradle/
-.idea/
-.kubernetes-manifests-*/
-.project
-.skaffold-*.yaml
-.terraform.lock.hcl
-.terraform/*
-.venv/
-.vs/
-.vscode/
-*.iml
-*.ipr
-*.iws
-*.pyc
-*.swp
-*.tfstate*
-*.tfvars
-*~
-bin/
-build/
-Dockerfile.pip
-node_modules/
-obj/
-pkg/
-release/wi-kubernetes-manifests.yaml
+```
+# Dependencies
+go.sum
 vendor/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Build artifacts
+*.o
+*.obj
+*.out
+```
